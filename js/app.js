@@ -1,23 +1,49 @@
 var player, camera, scene, renderer, camContainer;
 var effect, controls;
+var water;
 var controller1, controller2;
 var controls;
-var cube;
+var cube, light;
 var globalPlane, localPlane;
 var raycaster, intersected = [];
 var tempMatrix = new THREE.Matrix4();
 var group;
 var skybox, skyboxLayer2;
 
+var manager = new THREE.LoadingManager();
+manager.onStart = function ( url, itemsLoaded, itemsTotal ) {
+
+  console.log( 'Started loading file: ' + url + '.\nLoaded ' + itemsLoaded + ' of ' + itemsTotal + ' files.' );
+
+};
+manager.onLoad = function ( ) {
+
+	console.log( 'Loading complete!');
+  var overlay = document.getElementById("overlay");
+  overlay.remove();
+  // init();
+  // animate();
+
+};
+manager.onProgress = function ( url, itemsLoaded, itemsTotal ) {
+
+	console.log( 'Loading file: ' + url + '.\nLoaded ' + itemsLoaded + ' of ' + itemsTotal + ' files.' );
+
+};
+manager.onError = function ( url ) {
+
+	console.log( 'There was an error loading ' + url );
+
+};
+
 init();
 animate();
-
 
 function init() {
 
 
     // Marble floor
-    var textLoader = new THREE.TextureLoader();
+    var textLoader = new THREE.TextureLoader(manager);
     textLoader.setPath('./resources/MarbleMat/');
     var marbleMatGroup = [];
     var marAO = textLoader.load('Ambient_Occlusion.png');
@@ -34,45 +60,22 @@ function init() {
         marbleMatGroup[i].format = THREE.RGBFormat;
     }
 
-
     // Gate
-    //
-    var mtlLoader = new THREE.MTLLoader();
-    mtlLoader.setPath('./resources/obj/');
-    mtlLoader.load('mirror.mtl', function(materials) {
+    var ColLoad = new THREE.ColladaLoader(manager);
+    ColLoad.options.convertUpAxis = true;
+    ColLoad.load('resources/dae/mirror.dae', function(collada) {
+        var o = collada.scene;
+        var skin = collada.skins[0];
+        o.scale.set(10, 10, 10);
+        o.position.z = 5;
+        o.position.y = 7;
+        o.position.x = 0;
+        o.rotation.y = -Math.PI / 2;
+        o.rotation.z = Math.PI / 2;
+        o.rotation.x = Math.PI / 2;
+        scene.add(o);
 
-        materials.preload();
-
-        var objLoader = new THREE.OBJLoader();
-        // objLoader.setMaterials(materials);
-        objLoader.setPath('./resources/obj/');
-        var o;
-        objLoader.load('mirror.obj', function(object) {
-            // console.log(object);
-            o = object.children[0];
-            o.scale.set(10, 10, 10);
-            o.position.z = 5;
-            o.position.y = 7;
-            o.position.x = 0;
-            o.rotation.y = -Math.PI / 2;
-            o.rotation.z = Math.PI / 2;
-            o.rotation.x = Math.PI / 2;
-            o.traverse(function(child) {
-
-                if (child instanceof THREE.Mesh) {
-
-                    child.material = materials;
-
-                }
-            });
-
-            console.log(o);
-            scene.add(o);
-
-
-        }, onProgress, onError);
     });
-
 
 
     scene = new THREE.Scene();
@@ -80,11 +83,13 @@ function init() {
     player = new THREE.Object3D;
     scene.add(player);
     player.add(camera);
+    player.position.set(-13, 0, 4.6);
+    player.rotation.set(0,1.5, 0);
     raycaster = new THREE.Raycaster();
     group = new THREE.Group();
     scene.add(group);
 
-console.log(player.position);
+
     renderer = new THREE.WebGLRenderer({
         antialias: true
     });
@@ -108,8 +113,6 @@ console.log(player.position);
     controller1.addEventListener('triggerup', onTriggerUp);
     controller2.addEventListener('triggerdown', onTriggerDown);
     controller2.addEventListener('triggerup', onTriggerUp);
-    // camContainer.add(controller1);
-    // camContainer.add(controller2);
     player.add(controller1);
     player.add(controller2);
     effect = new THREE.VREffect(renderer);
@@ -117,7 +120,7 @@ console.log(player.position);
         document.body.appendChild(WEBVR.getButton(effect));
     }
 
-    var loader = new THREE.OBJLoader();
+    var loader = new THREE.OBJLoader(manager);
     loader.setPath('./resources/vive/');
     loader.load('vr_controller_vive_1_5.obj', function(object) {
         var loader = new THREE.TextureLoader();
@@ -127,8 +130,10 @@ console.log(player.position);
         controller.material.specularMap = loader.load('onepointfive_spec.png');
         controller1.add(object.clone());
         controller2.add(object.clone());
-
     });
+
+
+
     var geometry = new THREE.Geometry();
     geometry.vertices.push(new THREE.Vector3(0, 0, 0));
     geometry.vertices.push(new THREE.Vector3(0, 0, -1));
@@ -160,18 +165,24 @@ console.log(player.position);
 
 
     //light
-    var light = new THREE.DirectionalLight(0xffffff, 1);
+    // light = new THREE.DirectionalLight(0xffffff, 1);
+    var light = new THREE.DirectionalLight( 0xffffbb, 1 );
+light.position.set( - 1, 1, - 1 );
+scene.add( light );
     scene.add(light);
-    light.position.y = 30;
-    var ambi = new THREE.AmbientLight(0xffffff);
-    scene.add(ambi);
+    // light.position.x = -5;
+    // light.position.y = 10;
+    // light.position.z = 425;
+    // light.rotation.set(12, 33, 44);
+    // var ambi = new THREE.AmbientLight(0xffffff);
+    // scene.add(ambi);
 
     //skybox
     var geometry = new THREE.SphereGeometry(1000, 60, 40);
     geometry.scale(-1, 1, 1);
 
     var material = new THREE.MeshBasicMaterial({
-        map: new THREE.TextureLoader().load('./resources/skies/sky_vue2.jpg')
+        map: new THREE.TextureLoader(manager).load('./resources/skies/sky_vue2.jpg')
     });
 
     skybox = new THREE.Mesh(geometry, material);
@@ -185,7 +196,7 @@ console.log(player.position);
     var material = new THREE.MeshBasicMaterial({
         transparent: true,
         opacity: 0.3,
-        map: new THREE.TextureLoader().load('./resources/clouds/clouds1.png')
+        map: new THREE.TextureLoader(manager).load('./resources/clouds/clouds1.png')
     });
 
     skyboxLayer2 = new THREE.Mesh(geometry, material);
@@ -195,6 +206,39 @@ console.log(player.position);
     //clipping plane
     localPlane = new THREE.Plane(new THREE.Vector3(-.5, 0, 0), .5);
     renderer.localClippingEnabled = true;
+
+
+
+    //waterGate
+    //water
+    waterNormals = new THREE.TextureLoader().load('./resources/water/waternormals.jpg');
+    waterNormals.wrapS = waterNormals.wrapT = THREE.MirroredRepeatWrapping;
+
+    groundMirror = new THREE.Mirror( renderer, camera, { clipBias: 0.0001, textureWidth: window.innerWidth, textureHeight: window.innerHeight, color: 0x777777 } );
+
+    water = new THREE.Water(renderer, camera, scene, {
+        textureWidth: 1024,
+        textureHeight: 1024,
+        waterNormals: waterNormals,
+        alpha: .95,
+        sunDirection: light.position.normalize(),
+        sunColor: 0xffffff,
+        waterColor: 0x001e0f,
+        distortionScale: .1
+    });
+
+    waterGate = new THREE.Mesh(
+        new THREE.PlaneBufferGeometry(17,8), groundMirror.material
+    );
+    waterGate.add(groundMirror);
+
+    waterGate.position.x = -.1;
+    waterGate.position.y = 2.8;
+    waterGate.position.z = 5;
+// waterGate.rotation.x = - Math.PI * 0.5;
+    waterGate.rotation.y = -1.57;
+    scene.add(waterGate);
+
 
 
     //cube
@@ -212,26 +256,33 @@ console.log(player.position);
     cube.position.y = 2;
     cube.name = "rotatebox";
     group.add(cube);
-}
+
+
+} //end init
 
 function render() {
 
     controller1.update();
     controller2.update();
     controls.update();
+groundMirror.render();
+    skyboxLayer2.rotation.y += .0002;
+    skybox.rotation.y += .00002;
+    // water.material.uniforms.time.value += 1.0 / 60.0;
+    // water.render();
     effect.render(scene, camera);
     // var timer = Date.now() * 0.0001;
     // cube.rotation.x = Math.cos(timer) * 5;
     // cube.rotation.z = Math.sin(timer) * 5;
-    skyboxLayer2.rotation.y -= .0005;
-    skybox.rotation.y += .00007;
-
 }
 
 function animate() {
     effect.requestAnimationFrame(animate);
     render();
 }
+
+
+
 
 
 //raycasting/interaction
@@ -246,12 +297,13 @@ function onTriggerDown(event) {
         if (object.tag != "floor") {
             object.matrix.premultiply(tempMatrix);
             object.matrix.decompose(object.position, object.quaternion, object.scale);
-            // object.material.emissive.b = 1;
+            object.material.emissive.b = 1;
             controller.add(object);
             controller.userData.selected = object;
         } else {
-            player.position.set(intersection.point.x, 0, intersection.point.z)
-            // console.log();
+            player.position.set(intersection.point.x, 0, intersection.point.z);
+                console.log(player.position);
+                    console.log(player.rotation);
         }
     }
 
@@ -263,7 +315,7 @@ function onTriggerUp(event) {
         var object = controller.userData.selected;
         object.matrix.premultiply(controller.matrixWorld);
         object.matrix.decompose(object.position, object.quaternion, object.scale);
-        // object.material.emissive.b = 0;
+        object.material.emissive.b = 0;
         group.add(object);
     }
     controller.userData.selected = undefined;
@@ -324,3 +376,21 @@ function onWindowResize() {
     camera.updateProjectionMatrix();
     effect.setSize(window.innerWidth, window.innerHeight);
 }
+
+// function fade(element) {
+//     var op = 1;  // initial opacity
+//     var timer = setInterval(function () {
+//         if (op <= 0){
+//
+//             element.style.display = 'none';
+//             clearInterval(timer);
+//         }
+//         element.style.opacity = op;
+//         element.style.filter = 'alpha(opacity=' + op * 100 + ")";
+//         op -= op * 0.1;
+//         }, 50);
+// }
+
+window.addEventListener('keydown', function(){
+  console.log(camera.rotation);
+})
